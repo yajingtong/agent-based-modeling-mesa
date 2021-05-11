@@ -6,7 +6,7 @@ This is a geoversion of a simple agent-based pandemic model, utilizing the capab
 
 It uses geographical data of wenatchee's regions on top of a an Leaflet map to show the location of agents (in a continuous space).
 
-Person agents are initially located in random positions in the city, then start moving around unless they are infected. A fraction of agents start with an infection and may move or stop (based on the code) in each step. Susceptible agents (those who have never been infected) who come in proximity with an infected agent may become infected.
+Person agents are initially located in random positions in the city, then start moving around unless they are infected. A fraction of agents start with an infection and may move or stop (based on the setting) in each step. Susceptible agents (those who have never been infected) who come in proximity with an infected agent may become infected.
 
 Neighbourhood agents represent neighbourhoods in the wenatchee city, and become hot-spots (colored red) if there are infected agents inside them. Data obtained from this link.The save agents & regions ramain colour blue.
 
