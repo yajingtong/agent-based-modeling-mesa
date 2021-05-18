@@ -17,6 +17,9 @@ class PersonAgent(GeoAgent):
         agent_type="susceptible",
         mobility_range=100,
         init_infected=0.1,
+        recovery_rate=0.2,
+        death_risk=0.1,
+       ,
     ):
         """
         Create a new person agent.
@@ -150,7 +153,6 @@ class InfectedModel(Model):
             {
                 "infected": get_infected_count,
                 "susceptible": get_susceptible_count,
-              
             }
         )
 
@@ -199,6 +201,8 @@ class InfectedModel(Model):
             "infected": 0,
             "safe": 0,
             "hotspot": 0,
+            "recovered": 0,
+            "dead":0,
         }
 
     def step(self):
@@ -224,5 +228,10 @@ def get_infected_count(model):
 
 def get_susceptible_count(model):
     return model.counts["susceptible"]
+
+
+def get_dead_count(model):
+    return model.counts["dead"]
+
 
 
