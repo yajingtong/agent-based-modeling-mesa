@@ -7,7 +7,7 @@ from mesa_geo.visualization.MapModule import MapModule
 
 class InfectedText(TextElement):
     """
-      展示已进行的步骤数量
+      to show the processed steps
     """
 
     def __init__(self):
@@ -17,20 +17,26 @@ class InfectedText(TextElement):
         return "Steps: " + str(model.steps)
 
 
+
 model_params = {
-    "pop_size": UserSettableParameter("slider", "人口数量", 500, 100, 1000, 200),
+    "pop_size": UserSettableParameter("slider", "population", 500, 100, 1000, 200),
     "init_infected": UserSettableParameter(
-        "slider", "最初感染人数占比", 0.2, 0.00, 1.0, 0.05
+        "slider", "initial infected", 0.2, 0.00, 1.0, 0.05
     ),
     "exposure_distance": UserSettableParameter(
-        "slider", "接触距离", 500, 100, 1000, 100
+        "slider", "exposure distance", 500, 100, 1000, 100
     ),
+    "infection_risk": UserSettableParameter(
+        "slider", "infection risk", 0.1, 0.00, 1.0, 0.05
+    ),
+
 }
+
 
 
 def infected_draw(agent):
     """
-        使用portrayal模型可视化
+     visualization  with  portrayal 
     """
     portrayal = dict()
     if isinstance(agent, PersonAgent):
@@ -46,8 +52,8 @@ infected_text = InfectedText()
 map_element = MapModule(infected_draw, InfectedModel.MAP_COORDS, 10, 500, 800)
 infected_chart = ChartModule(
     [
-        {"Label": "感染者", "Color": "Red"},
-        {"Label": "未感染人群", "Color": "Blue"},
+        {"Label": "infected", "Color": "Red"},
+        {"Label": "susceptible", "Color": "Blue"},
 
     ]
 )
