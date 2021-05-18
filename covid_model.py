@@ -15,39 +15,41 @@ class PersonAgent(GeoAgent):
         model,
         shape,
         agent_type="susceptible",
-        mobility_range=1000,
+        mobility_range=100,
         init_infected=0.1,
     ):
         """
-        创建agent来表示感染者和未感染者
-        :param unique_id:   agent ID
-        :param model:       模型
-        :param shape:       agent包含的Shape对象
-        :param agent_type:  agent是否感染
-        :param mobility_range:  agent移动距离的范围
+        Create a new person agent.
+        :param unique_id:   Unique identifier for the agent
+        :param model:       Model in which the agent runs
+        :param shape:       Shape object for the agent
+        :param agent_type:  Indicator if agent is infected ("infected", "susceptible", "recovered" or "dead")
+        :param mobility_range:  Range of distance to move in one step
         """
         super().__init__(unique_id, model, shape)
-        # 设置agent参数
+        # Agent parameters
         self.atype = agent_type
         self.mobility_range = mobility_range
+        self.recovery_rate = recovery_rate
+        self.death_risk = death_risk
 
-        # 随机选择被感染者
+        # Random choose if infected
         if self.random.random() < init_infected:
             self.atype = "infected"
-            self.model.counts["infected"] += 1  # 增加感染人群，调整初始计数
+            self.model.counts["infected"] += 1  # Adjust initial counts
             self.model.counts["susceptible"] -= 1
 
     def move_point(self, dx, dy):
         """
-        通过创建新店来移动原来的点的位置
-        :param dx:  在横坐标移动的距离
-        :param dy:  在纵坐标移动的距离
+        Move a point by creating a new one
+        :param dx:  Distance to move in x-axis
+        :param dy:  Distance to move in y-axis
         """
         return Point(self.shape.x + dx, self.shape.y + dy)
 
     def step(self):
-        """定义模型的一个步骤."""
-        # 检查易感染人群是否暴露
+        """Advance one step."""
+        # If susceptible, check if exposed
         if self.atype == "susceptible":
             neighbors = self.model.grid.get_neighbors_within_distance(
                 self, self.model.exposure_distance
@@ -60,46 +62,45 @@ class PersonAgent(GeoAgent):
                     self.atype = "infected"
                     break
 
-
-
-        # 如果没有感染，agent将继续移动
+      
+        # If not infected, move
         if self.atype != "infected":
             move_x = self.random.randint(-self.mobility_range, self.mobility_range)
             move_y = self.random.randint(-self.mobility_range, self.mobility_range)
-            self.shape = self.move_point(move_x, move_y)  # 移动到下一位置
+            self.shape = self.move_point(move_x, move_y)  # Reassign shape
 
-        self.model.counts[self.atype] += 1  # 对agent类型进行计数
+        self.model.counts[self.atype] += 1  # Count agent type
 
     def __repr__(self):
         return "Person " + str(self.unique_id)
 
 
 class NeighbourhoodAgent(GeoAgent):
-    """Neighbourhood agent. 根据感染人数改变颜色."""
+    """Neighbourhood agent. Changes color according to number of infected inside it."""
 
-    def __init__(self, unique_id, model, shape, agent_type="safe", hotspot_threshold=2):
+    def __init__(self, unique_id, model, shape, agent_type="safe", hotspot_threshold=1):
         """
-        创建Neighbourhood agent.
-        :param unique_id:  agent ID
-        :param model:       模型
-        :param shape:       agent的shape属性对象
-        :param agent_type:  定义agent是否感染 ("infected", "susceptible")
-        :param hotspot_threshold:  有多少个感染者该区域会被看做疫情密集处
+        Create a new Neighbourhood agent.
+        :param unique_id:   Unique identifier for the agent
+        :param model:       Model in which the agent runs
+        :param shape:       Shape object for the agent
+        :param agent_type:  Indicator if agent is infected ("infected", "susceptible")
+        :param hotspot_threshold:   Number of infected agents in region to be considered a hot-spot
         """
         super().__init__(unique_id, model, shape)
         self.atype = agent_type
         self.hotspot_threshold = (
             hotspot_threshold
-        )  # 当该区域是疫情密集处
+        )  # When a neighborhood is considered a hot-spot
         self.color_hotspot()
 
     def step(self):
-        """使agent移动一步."""
+        """Advance agent one step."""
         self.color_hotspot()
-        self.model.counts[self.atype] += 1  # agent类型计数
+        self.model.counts[self.atype] += 1  # Count agent type
 
     def color_hotspot(self):
-        # 查看是否该区域是疫情密集处 (根据已感染人数的数量决定)
+        # Determine if this region agent is a hot-spot (if more than threshold person agents are infected)
         neighbors = self.model.grid.get_intersecting_agents(self)
         infected_neighbors = [
             neighbor for neighbor in neighbors if neighbor.atype == "infected"
@@ -114,28 +115,31 @@ class NeighbourhoodAgent(GeoAgent):
 
 
 class InfectedModel(Model):
-    """定义模拟新冠病毒传播模型."""
+    """Model class for a simplistic infection model."""
 
-    # 定义地图中心坐标
+    # Geographical parameters for desired map
     MAP_COORDS = [47.42, -120.30]
     geojson_regions = "develop1.geojson"
     unique_id = "BLOCK_ID"
 
     def __init__(self, pop_size, init_infected, exposure_distance, infection_risk=0.2):
         """
-       初始化模型
-        :param pop_size:       人口数量
-        :param init_infected:   初始设置已感染人群
-        :param exposure_distance:   病毒暴露距离
-        :param infection_risk:      密接人群的感染几率
+        Create a new InfectedModel
+        :param pop_size:        Size of population
+        :param init_infected:   Probability of a person agent to start as infected
+        :param exposure_distance:   Proximity distance between agents to be exposed to each other
+        :param infection_risk:      Probability of agent to become infected, if it has been exposed to another infected
         """
         self.schedule = BaseScheduler(self)
         self.grid = GeoSpace()
+        self.bbox = None
         self.steps = 0
         self.counts = None
         self.reset_counts()
+        self.idx = index.Index()
+        self.idx.agents = {}
 
-        # 设置模型参数
+        # model parameters
         self.pop_size = pop_size
         self.counts["susceptible"] = pop_size
         self.exposure_distance = exposure_distance
@@ -146,33 +150,34 @@ class InfectedModel(Model):
             {
                 "infected": get_infected_count,
                 "susceptible": get_susceptible_count,
+              
             }
         )
 
-        # 设置住宅区域
+        # Set up the Neighbourhood patches for every region in file (add to schedule later)
         AC = AgentCreator(NeighbourhoodAgent, {"model": self})
         neighbourhood_agents = AC.from_file(
             self.geojson_regions, unique_id=self.unique_id
         )
         self.grid.add_agents(neighbourhood_agents)
 
-        # 生成agent
+        # Generate PersonAgent population
         ac_population = AgentCreator(
             PersonAgent, {"model": self, "init_infected": init_infected}
         )
-        # 生成随机的位置, 将neighbourhood agent添加到grid和计时器中
+        # Generate random location to add agent to grid and scheduler
         for i in range(pop_size):
             this_neighbourhood = self.random.randint(
                 0, len(neighbourhood_agents) - 1
-            )  # agent的起始位置
+            )  # Region where agent starts
             center_x, center_y = neighbourhood_agents[
                 this_neighbourhood
             ].shape.centroid.coords.xy
-            n_bounds = neighbourhood_agents[this_neighbourhood].shape.bounds  #住宅区域的边界
+            this_bounds = neighbourhood_agents[this_neighbourhood].shape.bounds
             spread_x = int(
-                n_bounds[2] - n_bounds[0]
-            )  # 使agent随机向周围移动
-            spread_y = int(n_bounds[3] - n_bounds[1])
+                this_bounds[2] - this_bounds[0]
+            )  # Heuristic for agent spread in region
+            spread_y = int(this_bounds[3] - this_bounds[1])
             this_x = center_x[0] + self.random.randint(0, spread_x) - spread_x / 2
             this_y = center_y[0] + self.random.randint(0, spread_y) - spread_y / 2
             this_person = ac_population.create_agent(
@@ -181,8 +186,8 @@ class InfectedModel(Model):
             self.grid.add_agents(this_person)
             self.schedule.add(this_person)
 
-        # 添加人口后，添加住宅区域agent
-        # 依据 BaseScheduler改变颜色
+        # Add the neighbourhood agents to schedule AFTER person agents,
+        # to allow them to update their color by using BaseScheduler
         for agent in neighbourhood_agents:
             self.schedule.add(agent)
 
@@ -197,27 +202,27 @@ class InfectedModel(Model):
         }
 
     def step(self):
-        """模型运行一个步骤."""
+        """Run one step of the model."""
         self.steps += 1
         self.reset_counts()
         self.schedule.step()
-        self.grid._recreate_rtree()  # 在agent移动后，重新计算r树
+        self.grid._recreate_rtree()  # Recalculate spatial tree, because agents are moving
 
         self.datacollector.collect(self)
 
-        # 模型一直运行直到感染人数达到80%
+        # Run until no one is infected or over 80% is infected
         if self.counts["infected"] >= 0.8 * self.pop_size:
             self.running = False
-    def writeagents(self):
-        self.write()
+        elif self.counts["infected"] == 0:
+            self.running = False
 
-# Functions needed for datacollector
+
+# Functions  for datacollector to collect data
 def get_infected_count(model):
     return model.counts["infected"]
 
 
 def get_susceptible_count(model):
     return model.counts["susceptible"]
-
 
 
